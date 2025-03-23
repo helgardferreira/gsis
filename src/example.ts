@@ -1,4 +1,4 @@
-import type { GraphOutputTypes, GraphQueryType } from ".";
+import type { GraphOutputTypes, GraphQueryResolvers, GraphQueryType } from ".";
 
 export const typeDefs = `#graphql
   enum Episode {
@@ -70,6 +70,7 @@ export const typeDefs = `#graphql
     search(
       id: ID!
       episode: Episode
+      companion: Droid
     ): SearchResult
   }
 `;
@@ -130,10 +131,43 @@ export const exampleQuery: ExampleQuery = {
     friends: undefined,
   },
   search: {
+    appearsIn: [],
+    friends: [],
     id: "",
     name: "",
-    appearsIn: [],
-    friends: undefined,
-    primaryFunction: undefined,
+    starships: undefined,
+    totalCredits: undefined,
+  },
+};
+
+type ExampleQueryResolvers = GraphQueryResolvers<typeof typeDefs>;
+
+export const exampleQueryResolvers: ExampleQueryResolvers = {
+  droid: (_id) => {
+    return {
+      appearsIn: [],
+      friends: [],
+      id: "",
+      name: "",
+      primaryFunction: undefined,
+    };
+  },
+  hero: (_episode) => {
+    return {
+      appearsIn: [],
+      friends: undefined,
+      id: "",
+      name: "",
+    };
+  },
+  search: (_id, _episode, _companion) => {
+    return {
+      appearsIn: [],
+      friends: undefined,
+      id: "",
+      name: "",
+      starships: undefined,
+      totalCredits: undefined,
+    };
   },
 };

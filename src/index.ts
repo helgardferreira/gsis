@@ -143,7 +143,8 @@ export type GraphEnums<TSchema> = ParseEnums<TSchema> extends infer Enums
 
 type ParseValue<
   TValue extends string,
-  TEnums extends Record<string, unknown>
+  TEnums extends Record<string, unknown>,
+  TUnions extends Record<string, unknown>
 > = TValue extends "Int"
   ? number
   : TValue extends "Float"
@@ -154,40 +155,46 @@ type ParseValue<
   ? boolean
   : TValue extends "ID"
   ? string
-  : {} extends TEnums[TValue]
-  ? TValue
-  : TEnums[TValue];
+  : TValue extends keyof TEnums
+  ? TEnums[TValue]
+  : TValue extends keyof TUnions
+  ? TUnions[TValue]
+  : TValue;
 
 type ParseNullableModifier<
   TValue extends string,
-  TEnums extends Record<string, unknown>
+  TEnums extends Record<string, unknown>,
+  TUnions extends Record<string, unknown>
 > = TValue extends `${infer Value}!`
-  ? ParseValue<Value, TEnums>
-  : ParseValue<TValue, TEnums> | undefined;
+  ? ParseValue<Value, TEnums, TUnions>
+  : ParseValue<TValue, TEnums, TUnions> | undefined;
 
 type ParseListModifier<
   TValue extends string,
-  TEnums extends Record<string, unknown>
+  TEnums extends Record<string, unknown>,
+  TUnions extends Record<string, unknown>
 > = TValue extends `[${infer Inner}]!`
-  ? ParseListModifier<Inner, TEnums>[]
+  ? ParseListModifier<Inner, TEnums, TUnions>[]
   : TValue extends `[${infer Inner}]`
-  ? ParseListModifier<Inner, TEnums>[] | undefined
-  : ParseNullableModifier<TValue, TEnums>;
+  ? ParseListModifier<Inner, TEnums, TUnions>[] | undefined
+  : ParseNullableModifier<TValue, TEnums, TUnions>;
 
 type ParseFieldValue<
   TValue extends string,
-  TEnums extends Record<string, unknown>
+  TEnums extends Record<string, unknown>,
+  TUnions extends Record<string, unknown>
 > = TValue extends `[${infer _}]`
-  ? ParseListModifier<TValue, TEnums>
+  ? ParseListModifier<TValue, TEnums, TUnions>
   : TValue extends `[${infer _}]!`
-  ? ParseListModifier<TValue, TEnums>
-  : ParseNullableModifier<TValue, TEnums>;
+  ? ParseListModifier<TValue, TEnums, TUnions>
+  : ParseNullableModifier<TValue, TEnums, TUnions>;
 
 type ParseField<
   TField extends string,
-  TEnums extends Record<string, unknown>
+  TEnums extends Record<string, unknown>,
+  TUnions extends Record<string, unknown>
 > = TField extends `${infer Key}:${infer Value}`
-  ? { [K in Key]: ParseFieldValue<Value, TEnums> }
+  ? { [K in Key]: ParseFieldValue<Value, TEnums, TUnions> }
   : never;
 
 type ParseTypeSignature<TSignature> =
@@ -205,31 +212,39 @@ type ParseTypeSignature<TSignature> =
     ? `${Trim<Key>}:${TakeValue<Value>}` | ParseTypeSignature<SkipValue<Value>>
     : never;
 
-type ParseFields<TSignature, TEnums extends Record<string, unknown>> = Expand<
-  UnionToIntersection<ParseField<ParseTypeSignature<TSignature>, TEnums>>
+type ParseFields<
+  TSignature,
+  TEnums extends Record<string, unknown>,
+  TUnions extends Record<string, unknown>
+> = Expand<
+  UnionToIntersection<
+    ParseField<ParseTypeSignature<TSignature>, TEnums, TUnions>
+  >
 >;
 
 type ParseInterfaces<
   TSchema,
-  TEnums extends Record<string, unknown>
+  TEnums extends Record<string, unknown>,
+  TUnions extends Record<string, unknown>
 > = TSchema extends `${infer _}interface ${infer RawName}{${infer Signature}}${infer Rest}`
   ? RawName extends `${infer Name} implements ${infer _}`
     ? Trim<Name> extends `${infer InterfaceName}`
       ? {
-          [K in InterfaceName]: ParseFields<Signature, TEnums>;
-        } & ParseInterfaces<Rest, TEnums>
-      : {} & ParseInterfaces<Rest, TEnums>
+          [K in InterfaceName]: ParseFields<Signature, TEnums, TUnions>;
+        } & ParseInterfaces<Rest, TEnums, TUnions>
+      : {} & ParseInterfaces<Rest, TEnums, TUnions>
     : Trim<RawName> extends `${infer InterfaceName}`
     ? {
-        [K in InterfaceName]: ParseFields<Signature, TEnums>;
-      } & ParseInterfaces<Rest, TEnums>
-    : {} & ParseInterfaces<Rest, TEnums>
+        [K in InterfaceName]: ParseFields<Signature, TEnums, TUnions>;
+      } & ParseInterfaces<Rest, TEnums, TUnions>
+    : {} & ParseInterfaces<Rest, TEnums, TUnions>
   : {};
 
 export type GraphInterfaces<
   TSchema,
-  TEnums extends Record<string, unknown>
-> = ParseInterfaces<TSchema, TEnums> extends infer Interfaces
+  TEnums extends Record<string, unknown>,
+  TUnions extends Record<string, unknown>
+> = ParseInterfaces<TSchema, TEnums, TUnions> extends infer Interfaces
   ? Expand<Interfaces>
   : never;
 
@@ -257,29 +272,28 @@ export type GraphUnions<TSchema> = ParseUnions<TSchema> extends infer Unions
 
 type ParseTypes<
   TSchema,
-  TEnums extends Record<string, unknown>
+  TEnums extends Record<string, unknown>,
+  TUnions extends Record<string, unknown>
 > = TSchema extends `${infer _}type ${infer RawName}{${infer Signature}}${infer Rest}`
   ? RawName extends `${infer Name} implements ${infer _}`
     ? Trim<Name> extends `${infer TypeName}`
       ? TypeName extends "Query" | "Mutation"
-        ? {} & ParseTypes<Rest, TEnums>
+        ? {} & ParseTypes<Rest, TEnums, TUnions>
         : {
-            [K in TypeName]: ParseFields<Signature, TEnums>;
-          } & ParseTypes<Rest, TEnums>
-      : {} & ParseTypes<Rest, TEnums>
+            [K in TypeName]: ParseFields<Signature, TEnums, TUnions>;
+          } & ParseTypes<Rest, TEnums, TUnions>
+      : {} & ParseTypes<Rest, TEnums, TUnions>
     : Trim<RawName> extends `${infer TypeName}`
     ? TypeName extends "Query" | "Mutation"
-      ? {} & ParseTypes<Rest, TEnums>
+      ? {} & ParseTypes<Rest, TEnums, TUnions>
       : {
-          [K in TypeName]: ParseFields<Signature, TEnums>;
-        } & ParseTypes<Rest, TEnums>
-    : {} & ParseTypes<Rest, TEnums>
+          [K in TypeName]: ParseFields<Signature, TEnums, TUnions>;
+        } & ParseTypes<Rest, TEnums, TUnions>
+    : {} & ParseTypes<Rest, TEnums, TUnions>
   : {};
 
-type ParseToken<TInternal, TExternal, TToken> = TToken extends Array<
-  infer Token
->
-  ? ParseToken<TInternal, TExternal, Token>[]
+type ParseToken<TInternal, TExternal, TToken> = TToken extends Array<infer _>
+  ? { [Token in keyof TToken]: ParseToken<TInternal, TExternal, TToken[Token]> }
   : TToken extends keyof TInternal
   ? TInternal[TToken] extends infer Ref extends Record<string, any>
     ? { [Token in keyof Ref]: ParseToken<TInternal, TExternal, Ref[Token]> }
@@ -302,7 +316,6 @@ type ParseTokens<TInternal, TExternal = unknown> = {
     : never;
 };
 
-// TODO: add `resolvers` inference
 // TODO: add `Mutation` type inference
 // TODO: add `Subscription` type inference
 // TODO: input object types
@@ -310,10 +323,10 @@ export type GraphOutputTypes<TSchema> = StripDescriptions<
   StripComments<StripDirectives<TSchema>>
 > extends infer Stripped
   ? ParseEnums<Stripped> extends infer Enums extends Record<string, unknown>
-    ? ParseInterfaces<Stripped, Enums> extends infer Interfaces
-      ? ParseUnions<Stripped> extends infer Unions
-        ? Expand<ParseTypes<Stripped, Enums>> extends infer Types
-          ? ParseTokens<ParseTokens<Types, Unions>, Interfaces>
+    ? ParseUnions<Stripped> extends infer Unions extends Record<string, unknown>
+      ? ParseInterfaces<Stripped, Enums, Unions> extends infer Interfaces
+        ? Expand<ParseTypes<Stripped, Enums, Unions>> extends infer Types
+          ? ParseTokens<Types, Interfaces>
           : never
         : never
       : never
@@ -322,29 +335,115 @@ export type GraphOutputTypes<TSchema> = StripDescriptions<
 
 type ParseQuery<
   TSchema,
-  TEnums extends Record<string, unknown>
+  TEnums extends Record<string, unknown>,
+  TUnions extends Record<string, unknown>
 > = TSchema extends `${infer _}type ${infer RawName}{${infer Signature}}${infer Rest}`
   ? Trim<RawName> extends `${infer TypeName}`
     ? TypeName extends "Query"
-      ? { Query: ParseFields<Signature, TEnums> }
-      : ParseQuery<Rest, TEnums>
-    : ParseQuery<Rest, TEnums>
+      ? { Query: ParseFields<Signature, TEnums, TUnions> }
+      : ParseQuery<Rest, TEnums, TUnions>
+    : ParseQuery<Rest, TEnums, TUnions>
   : never;
 
-// TODO: refactor this
 export type GraphQueryType<TSchema> = StripDescriptions<
   StripComments<StripDirectives<TSchema>>
 > extends infer Stripped
   ? ParseEnums<Stripped> extends infer Enums extends Record<string, unknown>
-    ? ParseInterfaces<Stripped, Enums> extends infer Interfaces
-      ? ParseUnions<Stripped> extends infer Unions
-        ? GraphOutputTypes<Stripped> extends infer Types
-          ? ParseQuery<Stripped, Enums> extends infer Query
+    ? ParseUnions<Stripped> extends infer Unions extends Record<string, unknown>
+      ? ParseInterfaces<Stripped, Enums, Unions> extends infer Interfaces
+        ? ParseQuery<Stripped, Enums, Unions> extends infer Query
+          ? GraphOutputTypes<Stripped> extends infer Types
             ? ParseTokens<
-                ParseTokens<ParseTokens<Query, Unions>, Interfaces>,
+                ParseTokens<Query, Interfaces>,
                 Types
-              > extends Record<infer _, infer Type>
-              ? Type
+              > extends infer Parsed
+              ? Parsed extends { Query: infer Output }
+                ? Output
+                : never
+              : never
+            : never
+          : never
+        : never
+      : never
+    : never
+  : never;
+
+type ParseArguments<
+  TSignature,
+  TEnums extends Record<string, unknown>,
+  TUnions extends Record<string, unknown>
+> = TSignature extends `${infer _}:${infer Value}`
+  ? [
+      ParseFieldValue<TakeValue<Value>, TEnums, TUnions>,
+      ...ParseArguments<SkipValue<Value>, TEnums, TUnions>
+    ]
+  : [];
+
+type ParseQueryResolverSignature<
+  TSignature,
+  TEnums extends Record<string, unknown>,
+  TUnions extends Record<string, unknown>
+> = TSignature extends `${infer Name}(${infer Args})${infer _}:${infer Value}`
+  ? Name extends `${infer _}:${infer _}`
+    ? TSignature extends `${infer Name}:${infer Value}`
+      ? {
+          [K in Trim<Name>]: {
+            args: [];
+            value: ParseFieldValue<TakeValue<Value>, TEnums, TUnions>;
+          };
+        } & ParseQueryResolverSignature<SkipValue<Value>, TEnums, TUnions>
+      : never
+    : {
+        [K in Trim<Name>]: {
+          args: ParseArguments<Args, TEnums, TUnions>;
+          value: ParseFieldValue<TakeValue<Value>, TEnums, TUnions>;
+        };
+      } & ParseQueryResolverSignature<SkipValue<Value>, TEnums, TUnions>
+  : TSignature extends `${infer Name}:${infer Value}`
+  ? {
+      [K in Trim<Name>]: {
+        args: [];
+        value: ParseFieldValue<TakeValue<Value>, TEnums, TUnions>;
+      };
+    } & ParseQueryResolverSignature<SkipValue<Value>, TEnums, TUnions>
+  : {};
+
+type ParseQueryResolver<
+  TSchema,
+  TEnums extends Record<string, unknown>,
+  TUnions extends Record<string, unknown>
+> = TSchema extends `${infer _}type ${infer RawName}{${infer Signature}}${infer Rest}`
+  ? Trim<RawName> extends `${infer TypeName}`
+    ? TypeName extends "Query"
+      ? ParseQueryResolverSignature<Signature, TEnums, TUnions>
+      : ParseQueryResolver<Rest, TEnums, TUnions>
+    : ParseQueryResolver<Rest, TEnums, TUnions>
+  : never;
+
+type QueryResolverMap<TParsedSignature> = {
+  [K in keyof TParsedSignature]: TParsedSignature[K] extends {
+    args: infer Args extends Array<unknown>;
+    value: infer Value;
+  }
+    ? (...args: Args) => Value
+    : never;
+};
+
+export type GraphQueryResolvers<TSchema> = StripDescriptions<
+  StripComments<StripDirectives<TSchema>>
+> extends infer Stripped
+  ? ParseEnums<Stripped> extends infer Enums extends Record<string, unknown>
+    ? ParseUnions<Stripped> extends infer Unions extends Record<string, unknown>
+      ? ParseInterfaces<Stripped, Enums, Unions> extends infer Interfaces
+        ? Expand<
+            ParseQueryResolver<Stripped, Enums, Unions>
+          > extends infer QueryResolvers
+          ? GraphOutputTypes<Stripped> extends infer Types
+            ? ParseTokens<
+                ParseTokens<QueryResolvers, Interfaces>,
+                Types
+              > extends infer Parsed
+              ? QueryResolverMap<Parsed>
               : never
             : never
           : never
